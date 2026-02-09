@@ -429,19 +429,96 @@ class GameEngine {
         return title;
     }
 
-    addLogEntry(text, type = 'normal') {
+    addLogEntry(text, type = 'normal', statChanges = null) {
+        // Push to queue — entries are revealed one by one
+        if (!this._logQueue) this._logQueue = [];
+        if (!this._logBusy) this._logBusy = false;
+
+        this._logQueue.push({ text, type, statChanges });
+        this.state.eventLog.push({ text, type, age: this.state.age });
+
+        if (!this._logBusy) {
+            this._processLogQueue();
+        }
+    }
+
+    _processLogQueue() {
+        if (!this._logQueue || this._logQueue.length === 0) {
+            this._logBusy = false;
+            return;
+        }
+        this._logBusy = true;
+
+        const { text, type, statChanges } = this._logQueue.shift();
         const log = document.getElementById('story-log');
         const entry = document.createElement('div');
         entry.className = `log-entry ${type}`;
-        entry.innerHTML = text;
+        entry.style.opacity = '0';
+
+        // Build inner HTML with text span + optional stat changes
+        const statNames = { str: 'قوة', int: 'ذكاء', agi: 'رشاقة', cha: 'كاريزما', lck: 'حظ' };
+        let html = `<span class="entry-text"></span>`;
+        if (statChanges) {
+            html += '<div class="stat-change" style="opacity:0">';
+            for (const [key, val] of Object.entries(statChanges)) {
+                if (val > 0) html += `<span class="positive-change">+${val} ${statNames[key] || key.toUpperCase()} </span>`;
+                else if (val < 0) html += `<span class="negative-change">${val} ${statNames[key] || key.toUpperCase()} </span>`;
+            }
+            html += '</div>';
+        }
+        entry.innerHTML = html;
         log.appendChild(entry);
-        log.scrollTop = log.scrollHeight;
-        
-        this.state.eventLog.push({ text, type, age: this.state.age });
-        
+
+        // Trim old entries
         if (log.children.length > 50) {
             log.removeChild(log.children[0]);
         }
+
+        // Fade in the entry card
+        requestAnimationFrame(() => {
+            entry.style.transition = 'opacity 0.2s ease';
+            entry.style.opacity = '1';
+        });
+
+        // Typewriter effect on the text
+        const textEl = entry.querySelector('.entry-text');
+        const statEl = entry.querySelector('.stat-change');
+        this._typewriterEffect(textEl, text, 18, () => {
+            // After text finishes, show stat changes
+            if (statEl) {
+                statEl.style.transition = 'opacity 0.3s ease';
+                statEl.style.opacity = '1';
+            }
+            // Scroll to bottom
+            log.scrollTop = log.scrollHeight;
+            // Process next entry after a short pause
+            setTimeout(() => this._processLogQueue(), 150);
+        });
+
+        // Scroll to show this entry
+        requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; });
+    }
+
+    _typewriterEffect(element, text, speed, callback) {
+        let i = 0;
+        const chars = [...text]; // handle emojis & Arabic correctly
+        element.classList.add('typing');
+        const type = () => {
+            if (i < chars.length) {
+                // Add 2 chars per tick
+                const chunk = chars.slice(i, i + 2).join('');
+                element.textContent += chunk;
+                i += 2;
+                // Scroll as we type
+                const log = document.getElementById('story-log');
+                log.scrollTop = log.scrollHeight;
+                setTimeout(type, speed);
+            } else {
+                element.classList.remove('typing');
+                if (callback) callback();
+            }
+        };
+        type();
     }
 
     showNotification(message, type = 'info') {
@@ -567,27 +644,57 @@ class GameEngine {
         this.showNotification(`خبرة +${amount}!`, 'success');
         
         while (this.state.exp >= this.state.expToNext) {
+            this.state.exp -= this.state.expToNext;
             this.levelUp();
         }
         this.updateAllUI();
     }
 
     levelUp() {
-        this.state.exp -= this.state.expToNext;
         this.state.level++;
-        this.state.expToNext = Math.floor(this.state.expToNext * 1.5);
+        this.state.expToNext = Math.floor(this.state.expToNext * 1.2);
         
-        const statGain = this.randomInt(1, 3);
-        const stats = ['str', 'int', 'agi', 'cha', 'lck'];
-        const randomStat = this.randomPick(stats);
-        this.state[randomStat] += statGain;
+        // كل الإحصائيات تحصل على زيادة
+        const gains = {
+            str: Math.floor(Math.random() * 3) + 1,
+            int: Math.floor(Math.random() * 3) + 1,
+            agi: Math.floor(Math.random() * 3) + 1,
+            cha: Math.floor(Math.random() * 2),
+            lck: Math.floor(Math.random() * 2),
+        };
+
+        // مكافأة مهارة الغش
+        const bonus = this.state.cheatSkill;
+        if (bonus === 'strength') gains.str += 2;
+        if (bonus === 'magic') gains.int += 2;
+        if (bonus === 'speed') gains.agi += 2;
+        if (bonus === 'charm') gains.cha += 2;
+        if (bonus === 'luck') gains.lck += 2;
+
+        Object.entries(gains).forEach(([stat, val]) => this.modifyStat(stat, val));
         
-        this.state.maxHp += 10;
+        // HP و MP تتناسب مع القوة والذكاء
+        this.state.maxHp += 10 + Math.floor(this.state.str / 5);
         this.state.hp = this.state.maxHp;
-        this.state.maxMp += 5;
+        this.state.maxMp += 5 + Math.floor(this.state.int / 5);
         this.state.mp = this.state.maxMp;
-        
-        this.addLogEntry(`🎉 ارتقيت! المستوى ${this.state.level}!`, 'special');
+
+        this.addLogEntry(`🎉 ارتقيت! المستوى ${this.state.level}! — ${this.getTitle()}`, 'level-up', gains);
+        this.showNotification(`⬆️ مستوى ${this.state.level}!`, 'special');
+
+        // فحص الإنجازات
+        if (this.state.level >= 10) this.unlockAchievement('level_10');
+        if (this.state.level >= 25) this.unlockAchievement('level_25');
+        if (this.state.level >= 50) this.unlockAchievement('level_50');
+    }
+
+    unlockAchievement(id) {
+        if (this.state.achievements.includes(id)) return;
+        this.state.achievements.push(id);
+        const ach = DATA.achievements[id];
+        if (!ach) return;
+        this.showNotification(`🏆 إنجاز: ${ach.name}!`, 'special');
+        this.addLogEntry(`🏆 إنجاز جديد: ${ach.icon} ${ach.name} — ${ach.desc}`, 'special');
     }
 
     // ============ العائلة ============

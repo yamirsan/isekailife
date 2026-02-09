@@ -46,15 +46,50 @@ GameEngine.prototype.ageUp = function() {
     this.checkDeath();
     if (this.state.isDead) return;
     
-    // تشغيل الأحداث بالتسلسل
-    this.triggerMoodEvent();
+    // تشغيل الأحداث بالتسلسل — المعالم أولاً ثم المزاج
     this.triggerMilestoneEvents();
+    this.triggerMoodEvent();
     this.triggerPhaseEvents();
     this.naturalMoodDrift();
     this.checkMoodEffects();
     
+    // خبرة سلبية — الجميع يتعلم شيئاً كل سنة
+    this.passiveExpGain();
+    
     this.updateAllUI();
     this.showAgeActions();
+};
+
+// ============ خبرة سلبية كل سنة ============
+GameEngine.prototype.passiveExpGain = function() {
+    const age = this.state.age;
+    let exp = 0;
+    
+    if (age <= 2) {
+        exp = this.randomInt(5, 10);       // رضيع — تعلم أساسي
+    } else if (age <= 5) {
+        exp = this.randomInt(8, 18);       // طفل صغير — اكتشاف العالم
+    } else if (age <= 9) {
+        exp = this.randomInt(15, 30);      // طفولة — المدرسة والتعلم
+    } else if (age <= 12) {
+        exp = this.randomInt(20, 40);      // ما قبل المراهقة — بداية التدريب
+    } else if (age <= 17) {
+        exp = this.randomInt(30, 60);      // مراهقة — تدريب مكثف
+    } else if (age <= 24) {
+        exp = this.randomInt(40, 80);      // شباب — مغامرات ومعارك
+    } else if (age <= 39) {
+        exp = this.randomInt(50, 100);     // بلوغ — ذروة القوة
+    } else if (age <= 59) {
+        exp = this.randomInt(30, 60);      // نضج — حكمة متراكمة
+    } else {
+        exp = this.randomInt(15, 30);      // شيخوخة — تأمل وتعليم
+    }
+    
+    // مكافأة إضافية حسب مهارة الغش
+    if (this.state.cheatSkill === 'magic' && this.state.int > 20) exp += 10;
+    if (this.state.cheatSkill === 'luck') exp += this.randomInt(0, 15);
+    
+    if (exp > 0) this.gainExp(exp);
 };
 
 // ============ انحراف المزاج الطبيعي ============
@@ -101,9 +136,17 @@ GameEngine.prototype.checkMoodEffects = function() {
         }
     }
     
-    // السعادة العالية تعطي مكافآت
-    if (mood === 'ecstatic' && this.chance(30)) {
-        this.addLogEntry("✨ حماسك المشتعل يلهم من حولك!", 'special');
+    // السعادة العالية تعطي مكافآت (نادرة لتجنب التكرار)
+    if (mood === 'ecstatic' && this.chance(10)) {
+        // لا تكرر نفس الرسالة كل مرة
+        const ecstaticEvents = [
+            "✨ حماسك المشتعل يلهم من حولك!",
+            "✨ طاقتك الإيجابية تملأ المكان بالبهجة!",
+            "✨ ابتسامتك المشرقة ترفع معنويات رفاقك!",
+            "✨ سعادتك معدية وكل من حولك يبتسم!",
+            "✨ تشع ثقة بالنفس تجذب انتباه الآخرين!",
+        ];
+        this.addLogEntry(this.randomPick(ecstaticEvents), 'special');
         this.modifyStat('cha', 1);
         this.modifyFame(2);
     }
@@ -112,11 +155,17 @@ GameEngine.prototype.checkMoodEffects = function() {
 // ============ أحداث المزاج ============
 GameEngine.prototype.triggerMoodEvent = function() {
     const phase = this.state.storyPhase;
-    const moodEvents = DATA.moodEvents[phase];
+    let moodEvents = DATA.moodEvents[phase];
     if (!moodEvents || moodEvents.length === 0) return;
     
     // 50% فرصة لحدث مزاجي كل سنة
     if (!this.chance(50)) return;
+    
+    // فلترة أحداث المدرسة إذا لم يبدأ المدرسة بعد
+    if (!this.state.inSchool) {
+        moodEvents = moodEvents.filter(e => !e.text.includes('مدرسة') && !e.text.includes('اختبار') && !e.text.includes('مسابقة'));
+    }
+    if (moodEvents.length === 0) return;
     
     const event = this.randomPick(moodEvents);
     this.modifyMood(event.mood, event.text);
@@ -172,6 +221,7 @@ GameEngine.prototype.triggerMilestoneEvents = function() {
         this.addLogEntry("📚 بدأت تعلم القراءة والكتابة بشكل صحيح.", "normal");
         this.modifyStat('int', 1);
         this.modifyMood(5, null);
+        this.gainExp(20);
     }
     
     // ============ مرحلة الطفولة (6-9) ============
@@ -181,6 +231,7 @@ GameEngine.prototype.triggerMilestoneEvents = function() {
         s.inSchool = true;
         this.modifyStat('int', 2);
         this.modifyMood(8, "يوم المدرسة الأول مثير!");
+        this.gainExp(30);
     }
     
     // ============ مرحلة ما قبل المراهقة (10-12) ============
@@ -191,6 +242,7 @@ GameEngine.prototype.triggerMilestoneEvents = function() {
         this.modifyStat('str', 2);
         this.modifyStat('int', 2);
         this.modifyMood(10, "شعور بالنمو والقوة!");
+        this.gainExp(50);
     }
     
     if (age === 12 && !milestones.includes('combat_training')) {
@@ -200,12 +252,25 @@ GameEngine.prototype.triggerMilestoneEvents = function() {
     }
     
     // ============ مرحلة المراهقة (13-17) ============
+    if (age === 13 && !milestones.includes('cheat_boost')) {
+        milestones.push('cheat_boost');
+        this.addLogEntry("⚡ مهارة الغش تتيقظ أكثر! تشعر بقوة جديدة تتدفق فيك!", "special");
+        const skill = s.cheatSkill;
+        if (skill === 'strength') this.modifyStat('str', 5);
+        else if (skill === 'magic') this.modifyStat('int', 5);
+        else if (skill === 'speed') this.modifyStat('agi', 5);
+        else if (skill === 'charm') this.modifyStat('cha', 5);
+        else if (skill === 'luck') this.modifyStat('lck', 5);
+        this.gainExp(80);
+    }
+    
     if (age === 15 && !milestones.includes('guild_join')) {
         milestones.push('guild_join');
         this.addLogEntry("🏛️ سجلت في نقابة المغامرين كرتبة F!", "quest");
         s.guildRank = 0;
         this.modifyFame(10);
         this.modifyMood(15, "الانضمام للنقابة حلم تحقق!");
+        this.gainExp(60);
     }
     
     // ============ مرحلة الشباب (18-24) ============
@@ -219,6 +284,7 @@ GameEngine.prototype.triggerMilestoneEvents = function() {
         s.guildRank = Math.max(s.guildRank, 2);
         this.modifyFame(30);
         this.modifyMood(15, null);
+        this.gainExp(100);
     }
     
     if (age === 20 && !milestones.includes('first_journey')) {
@@ -229,6 +295,7 @@ GameEngine.prototype.triggerMilestoneEvents = function() {
         this.addLogEntry("🌍 حان وقت المغامرة الكبرى! ودعت عائلتك وانطلقت في رحلتك.", "special");
         this.addLogEntry(`📍 بعد أيام من السفر، وصلت إلى ${this.getLocationName(newLoc)}!`, "quest");
         this.modifyMood(12, null);
+        this.gainExp(80);
     }
     
     // ============ مرحلة البلوغ (25+) ============
@@ -276,17 +343,17 @@ GameEngine.prototype.triggerPhaseEvents = function() {
     switch(phase) {
         case 'baby':
         case 'toddler':
-            if (this.chance(60) && parentAlive) {
+            if (this.chance(40) && parentAlive) {
                 this.triggerChildhoodEvent(randomParent);
                 this.modifyMood(3, null);
             }
-            if (this.chance(25)) this.triggerSiblingEvent();
+            if (this.chance(15)) this.triggerSiblingEvent();
             break;
             
         case 'child':
             if (this.chance(50) && parentAlive) this.triggerChildhoodEvent(randomParent);
             if (this.chance(30)) this.triggerSiblingEvent();
-            if (this.chance(35)) this.triggerSchoolEvent();
+            if (this.chance(35) && this.state.inSchool) this.triggerSchoolEvent();
             break;
             
         case 'preteen':
@@ -300,6 +367,7 @@ GameEngine.prototype.triggerPhaseEvents = function() {
                 const event = this.randomPick(DATA.teenEvents);
                 this.addLogEntry(`✨ ${event.text}`, 'special');
                 this.modifyStat(event.stat, event.amount);
+                this.gainExp(this.randomInt(20, 50));
             }
             if (this.chance(25)) this.meetRandomPartyMember();
             if (this.chance(25)) this.triggerSiblingEvent();
@@ -310,6 +378,7 @@ GameEngine.prototype.triggerPhaseEvents = function() {
                 const event = this.randomPick(DATA.adultEvents);
                 this.addLogEntry(`✨ ${event.text}`, 'special');
                 this.modifyStat(event.stat, event.amount);
+                this.gainExp(this.randomInt(40, 100));
             }
             if (this.chance(30)) this.triggerRandomEncounter();
             if (this.chance(20)) this.meetRandomPartyMember();
@@ -320,6 +389,7 @@ GameEngine.prototype.triggerPhaseEvents = function() {
                 const event = this.randomPick(DATA.adultEvents);
                 this.addLogEntry(`✨ ${event.text}`, 'special');
                 this.modifyStat(event.stat, event.amount);
+                this.gainExp(this.randomInt(40, 100));
             }
             if (this.chance(25)) this.triggerRandomEncounter();
             if (this.chance(15) && !s.married) this.triggerRomanceHint();
@@ -477,6 +547,7 @@ GameEngine.prototype.triggerSchoolEvent = function() {
     this.addLogEntry(`🏫 ${event.text}`, 'normal');
     if (event.stat && event.amount > 0) this.modifyStat(event.stat, event.amount);
     if (event.mood) this.modifyMood(event.mood, null);
+    this.gainExp(this.randomInt(10, 25));
 };
 
 // ============ أحداث ما قبل المراهقة ============
@@ -494,6 +565,7 @@ GameEngine.prototype.triggerPreteenEvent = function() {
     this.addLogEntry(`⭐ ${event.text}`, 'special');
     this.modifyStat(event.stat, event.amount);
     this.modifyMood(event.mood, null);
+    this.gainExp(this.randomInt(15, 35));
 };
 
 // ============ أحداث الناضج ============
@@ -511,6 +583,7 @@ GameEngine.prototype.triggerMatureEvent = function() {
     this.addLogEntry(`📖 ${event.text}`, 'normal');
     this.modifyStat(event.stat, event.amount);
     this.modifyMood(event.mood, null);
+    this.gainExp(this.randomInt(30, 70));
 };
 
 // ============ أحداث الشيخوخة ============
@@ -528,6 +601,7 @@ GameEngine.prototype.triggerElderEvent = function() {
     this.addLogEntry(`🌅 ${event.text}`, 'normal');
     if (event.stat) this.modifyStat(event.stat, event.amount);
     this.modifyMood(event.mood, null);
+    this.gainExp(this.randomInt(15, 30));
 };
 
 // ============ تلميحات رومانسية ============
@@ -551,7 +625,11 @@ GameEngine.prototype.triggerRomanceHint = function() {
 GameEngine.prototype.triggerChildhoodEvent = function(parent) {
     if (!parent) return;
     
-    const event = this.randomPick(DATA.childhoodEvents);
+    const age = this.state.age;
+    const eligible = DATA.childhoodEvents.filter(e => age >= (e.minAge || 0));
+    if (eligible.length === 0) return;
+    
+    const event = this.randomPick(eligible);
     const text = event.text.replace('{parent}', `${parent.relation.toLowerCase()} ${parent.firstName}`);
     
     this.addLogEntry(`👨‍👧 ${text}`, 'normal');
@@ -566,7 +644,11 @@ GameEngine.prototype.triggerSiblingEvent = function() {
     const sibling = this.randomPick(this.state.siblings);
     if (!sibling.alive) return;
     
-    const event = this.randomPick(DATA.siblingEvents);
+    const age = this.state.age;
+    const eligible = DATA.siblingEvents.filter(e => age >= (e.minAge || 0));
+    if (eligible.length === 0) return;
+    
+    const event = this.randomPick(eligible);
     const text = event.text.replace('{sibling}', `${sibling.relation} ${sibling.name}`);
     
     this.addLogEntry(`👫 ${text}`, 'normal');
@@ -607,6 +689,7 @@ GameEngine.prototype.selectTraining = function(type) {
             this.addLogEntry("⚖️ طورت كل قدراتك بالتساوي!", 'positive');
             break;
     }
+    this.gainExp(50);
     this.showAgeActions();
 };
 

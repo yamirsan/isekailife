@@ -516,11 +516,23 @@ body {
     padding: 14px 18px;
     margin-bottom: 12px;
     border-radius: 10px;
-    animation: slideIn 0.3s ease;
     font-size: 1rem;
     line-height: 1.8;
     text-align: right;
     border-right: 4px solid transparent;
+}
+
+/* Typing cursor (RTL — cursor on the left) */
+.entry-text.typing::before {
+    content: '▌';
+    color: #ffd700;
+    animation: blink-cursor 0.6s step-end infinite;
+    font-weight: 400;
+}
+
+@keyframes blink-cursor {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
 }
 
 @keyframes slideIn {
@@ -532,9 +544,20 @@ body {
 .log-entry.positive { background: rgba(46,204,113,0.2); border-right-color: #2ecc71; }
 .log-entry.negative { background: rgba(231,76,60,0.2); border-right-color: #e74c3c; }
 .log-entry.special { background: linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,107,107,0.2)); border-right-color: #ffd700; }
+.log-entry.level-up { background: linear-gradient(135deg, rgba(255,215,0,0.3), rgba(255,165,0,0.2)); border-right-color: #ffaa00; }
 .log-entry.battle { background: rgba(231,76,60,0.15); border-right-color: #c0392b; }
 .log-entry.quest { background: rgba(52,152,219,0.2); border-right-color: #3498db; }
 .log-entry.romance { background: rgba(233,30,99,0.2); border-right-color: #e91e63; }
+
+/* Stat change display in log entries */
+.log-entry .stat-change {
+    font-size: 0.75rem;
+    margin-top: 4px;
+    color: var(--text-dim);
+    direction: rtl;
+}
+.log-entry .stat-change .positive-change { color: #2ecc71; margin-left: 6px; }
+.log-entry .stat-change .negative-change { color: #e74c3c; margin-left: 6px; }
 
 /* Mood Bar */
 .mood-bar {
