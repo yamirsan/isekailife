@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0f0a1a">
+    <title>IsekaiLife - Anime Isekai Life Simulator</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Title Screen -->
+        <div id="title-screen" class="screen active">
+            <div class="title-container">
+                <div class="title-glow"></div>
+                <h1 class="game-title">⚔️ IsekaiLife ⚔️</h1>
+                <p class="game-subtitle">~ Another World Life Simulator ~</p>
+                <div class="title-art">
+                    <span class="float-icon">🌸</span>
+                    <span class="float-icon delay1">⚡</span>
+                    <span class="float-icon delay2">🐉</span>
+                    <span class="float-icon delay3">🗡️</span>
+                    <span class="float-icon delay4">✨</span>
+                </div>
+                
+                <!-- Language Selection -->
+                <div class="language-selector">
+                    <button class="lang-btn active">🇬🇧 English</button>
+                    <button class="lang-btn" onclick="switchToArabic()">🇸🇦 العربية</button>
+                </div>
+                <script>
+                    function switchToArabic() {
+                        var base = window.location.href.split('?')[0].replace(/\/index\.html$/i, '').replace(/\/$/, '');
+                        window.location.href = base + '/arabic/index.html';
+                    }
+                </script>
+                
+                <button class="btn btn-primary btn-large pulse" onclick="game.startNewGame()">
+                    ✦ New Reincarnation ✦
+                </button>
+                <button class="btn btn-secondary" onclick="game.loadGame()" id="load-btn" style="display:none;">
+                    Continue Journey
+                </button>
+            </div>
+        </div>
+
+        <!-- Death/Reincarnation Screen -->
+        <div id="death-screen" class="screen">
+            <div class="death-container">
+                <div id="death-narrative" class="narrative-text"></div>
+                <button class="btn btn-primary" id="death-continue-btn" style="display:none;" onclick="game.showReincarnation()">
+                    Accept Your Fate...
+                </button>
+            </div>
+        </div>
+
+        <!-- Character Creation -->
+        <div id="creation-screen" class="screen">
+            <div class="creation-container">
+                <h2>🌟 Choose Your New Life 🌟</h2>
+                <p class="subtitle">The Goddess presents you with a new beginning...</p>
+                
+                <!-- Gender Selection (First Step) -->
+                <div id="gender-selection" class="gender-selection">
+                    <label class="section-label">First, choose your gender:</label>
+                    <div class="gender-buttons">
+                        <button class="gender-btn" onclick="game.selectGenderAndGenerate('male')">
+                            <span class="gender-icon">♂️</span>
+                            <span class="gender-text">Male</span>
+                        </button>
+                        <button class="gender-btn" onclick="game.selectGenderAndGenerate('female')">
+                            <span class="gender-icon">♀️</span>
+                            <span class="gender-text">Female</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Character Choices (Second Step - Hidden Initially) -->
+                <div id="character-selection" style="display: none;">
+                    <div class="selected-gender-info">
+                        <span id="selected-gender-text"></span>
+                        <button class="btn-small" onclick="game.backToGenderSelect()">← Change Gender</button>
+                    </div>
+                    <div id="character-choices" class="character-choices">
+                        <!-- Random characters will be generated here -->
+                    </div>
+                    <div class="reroll-section">
+                        <button class="btn btn-secondary" onclick="game.generateNewChoices()">
+                            🔄 Show Different Options
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Game Screen -->
+        <div id="game-screen" class="screen">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="char-info">
+                    <span id="char-display-name" class="char-name">Hero</span>
+                    <span id="char-title" class="char-title">Lv.1 Novice</span>
+                </div>
+                <div class="age-display">
+                    <span>Age: <strong id="char-age">0</strong></span>
+                    <span>Year: <strong id="world-year">1</strong></span>
+                </div>
+                <div class="top-buttons">
+                    <button class="btn-icon" onclick="game.saveGame()" title="Save">💾</button>
+                    <button class="btn-icon" onclick="game.toggleMenu()" title="Menu">☰</button>
+                </div>
+            </div>
+
+            <!-- Mood Bar -->
+            <div class="mood-bar">
+                <span id="mood-icon">😊</span>
+                <span id="mood-text">Happy</span>
+                <div class="mood-meter">
+                    <div class="mood-fill mood-happy" id="mood-fill" style="width: 70%"></div>
+                </div>
+                <span class="mood-value-num" id="mood-value">70</span>
+            </div>
+
+            <!-- Stats Panel -->
+            <div class="stats-panel" id="stats-panel">
+                <!-- Compact stats (always visible) -->
+                <div class="stats-compact" id="stats-compact" onclick="game.toggleStats()">
+                    <span class="compact-stat">❤️ <span id="hp-compact">100</span></span>
+                    <span class="compact-stat">💙 <span id="mp-compact">50</span></span>
+                    <span class="compact-stat">⚔️ <span id="str-compact">10</span></span>
+                    <span class="compact-stat">🧠 <span id="int-compact">10</span></span>
+                    <span class="compact-stat">💨 <span id="agi-compact">10</span></span>
+                    <span class="compact-stat">💰 <span id="gold-compact">0</span></span>
+                    <span class="stats-toggle" id="stats-toggle">▼</span>
+                </div>
+                <!-- Full stats (hidden by default) -->
+                <div class="stats-full" id="stats-full">
+                    <div class="stat-row">
+                        <span class="stat-label">❤️ HP</span>
+                        <div class="stat-bar"><div class="stat-fill hp-fill" id="hp-bar"></div></div>
+                        <span class="stat-value" id="hp-value">100/100</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">💙 MP</span>
+                        <div class="stat-bar"><div class="stat-fill mp-fill" id="mp-bar"></div></div>
+                        <span class="stat-value" id="mp-value">50/50</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">⚔️ STR</span>
+                        <div class="stat-bar"><div class="stat-fill str-fill" id="str-bar"></div></div>
+                        <span class="stat-value" id="str-value">10</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">🧠 INT</span>
+                        <div class="stat-bar"><div class="stat-fill int-fill" id="int-bar"></div></div>
+                        <span class="stat-value" id="int-value">10</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">💨 AGI</span>
+                        <div class="stat-bar"><div class="stat-fill agi-fill" id="agi-bar"></div></div>
+                        <span class="stat-value" id="agi-value">10</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">💖 CHA</span>
+                        <div class="stat-bar"><div class="stat-fill cha-fill" id="cha-bar"></div></div>
+                        <span class="stat-value" id="cha-value">10</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">🍀 LCK</span>
+                        <div class="stat-bar"><div class="stat-fill lck-fill" id="lck-bar"></div></div>
+                        <span class="stat-value" id="lck-value">10</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">💰 Gold</span>
+                        <span class="stat-value gold-value" id="gold-value">0 G</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">⭐ Fame</span>
+                        <span class="stat-value fame-value" id="fame-value">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Event Log (scrollable) -->
+            <div class="event-log" id="event-log">
+                <div class="log-entries" id="log-entries"></div>
+            </div>
+
+            <!-- Action/Choice Panel -->
+            <div class="action-panel" id="action-panel">
+                <!-- Dynamic choices appear here -->
+            </div>
+
+            <!-- Bottom Navigation -->
+            <div class="bottom-nav">
+                <button class="nav-btn active" onclick="game.switchTab('story')" data-tab="story">
+                    📖<span>Story</span>
+                </button>
+                <button class="nav-btn" onclick="game.switchTab('actions')" data-tab="actions">
+                    ⚡<span>Actions</span>
+                </button>
+                <button class="nav-btn" onclick="game.switchTab('family')" data-tab="family">
+                    👨‍👩‍👧<span>Family</span>
+                </button>
+                <button class="nav-btn" onclick="game.switchTab('relationships')" data-tab="relationships">
+                    💕<span>Party</span>
+                </button>
+                <button class="nav-btn" onclick="game.switchTab('stats')" data-tab="stats">
+                    📊<span>Stats</span>
+                </button>
+                <button class="nav-btn" onclick="game.switchTab('inventory')" data-tab="inventory">
+                    🎒<span>Items</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameover-screen" class="screen">
+            <div class="gameover-content">
+                <h1>💀 Game Over</h1>
+                <div id="death-cause" class="death-cause"></div>
+                <div id="life-summary" class="life-summary"></div>
+                <button class="btn btn-primary" onclick="game.startNewGame()">🔄 Start New Life</button>
+                <button class="btn btn-secondary" onclick="location.reload()" style="margin-top:10px;">🏠 Return to Title</button>
+            </div>
+        </div>
+
+        <!-- Notification popup -->
+        <div id="notification" class="notification"></div>
+
+        <!-- Side Menu -->
+        <div id="side-menu" class="side-menu">
+            <div class="menu-content">
+                <h3>☰ Menu</h3>
+                <button class="menu-btn" onclick="game.saveGame()">💾 Save Game</button>
+                <button class="menu-btn" onclick="game.showCharacterSheet()">📋 Character Sheet</button>
+                <button class="menu-btn" onclick="game.showQuestLog()">📜 Quest Log</button>
+                <button class="menu-btn" onclick="game.showAchievements()">🏆 Achievements</button>
+                <button class="menu-btn" onclick="game.toggleMenu()">❌ Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="engine.js"></script>
+    <script src="events.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

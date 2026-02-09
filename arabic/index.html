@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>حياة إيسيكاي - محاكي التناسخ</title>
+    <link rel="stylesheet" href="styles-ar.css">
+</head>
+<body>
+    <div class="game-container">
+        <!-- Title Screen -->
+        <div id="title-screen" class="screen active">
+            <div class="title-container">
+                <div class="title-glow"></div>
+                <h1 class="title-art">حياة إيسيكاي</h1>
+                <p class="subtitle">✨ محاكي التناسخ في عالم آخر ✨</p>
+            </div>
+            
+            <!-- Language Selection -->
+            <div class="language-selector">
+                <button class="lang-btn" onclick="switchToEnglish()">🇬🇧 English</button>
+                <button class="lang-btn active">🇸🇦 العربية</button>
+            </div>
+            <script>
+                function switchToEnglish() {
+                    var base = window.location.href.substring(0, window.location.href.lastIndexOf('/arabic'));
+                    window.location.href = base + '/index.html';
+                }
+            </script>
+            
+            <div class="menu-buttons">
+                <button class="menu-btn" onclick="game.startNewGame()">🌟 حياة جديدة</button>
+                <button class="menu-btn" onclick="game.showCredits()">📜 المعلومات</button>
+            </div>
+            <div class="version-info">النسخة 1.0 - النسخة العربية</div>
+        </div>
+
+        <!-- Death Sequence Screen -->
+        <div id="death-screen" class="screen">
+            <div id="death-narrative" class="death-narrative"></div>
+            <button id="continue-btn" class="continue-btn hidden" onclick="game.showCharacterCreation()">
+                ✨ ابدأ حياتك الجديدة ✨
+            </button>
+        </div>
+
+        <!-- Character Creation Screen -->
+        <div id="creation-screen" class="screen">
+            <h2 class="screen-title">🌟 اختر تجسدك الجديد</h2>
+            
+            <!-- Gender Selection (Step 1) -->
+            <div id="gender-selection" class="gender-selection">
+                <p class="selection-prompt">اختر جنسك أولاً:</p>
+                <div class="gender-buttons">
+                    <button class="gender-btn male" onclick="game.selectGenderAndGenerate('male')">
+                        <span class="gender-icon">👦</span>
+                        <span class="gender-label">ذكر</span>
+                    </button>
+                    <button class="gender-btn female" onclick="game.selectGenderAndGenerate('female')">
+                        <span class="gender-icon">👧</span>
+                        <span class="gender-label">أنثى</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Character Selection (Step 2) -->
+            <div id="character-selection" class="character-selection hidden">
+                <div class="selected-gender-info">
+                    <span id="selected-gender-text"></span>
+                    <button class="btn-small" onclick="game.backToGenderSelect()">↩️ تغيير الجنس</button>
+                </div>
+                <p class="selection-prompt">اختر شخصيتك:</p>
+                <div id="character-choices" class="character-choices"></div>
+                <button class="menu-btn" onclick="game.generateNewChoices()" style="margin-top: 15px;">🔄 توليد خيارات جديدة</button>
+            </div>
+        </div>
+
+        <!-- Main Game Screen -->
+        <div id="game-screen" class="screen">
+            <div class="game-header">
+                <div class="header-info">
+                    <span id="player-name">الاسم</span>
+                    <span id="player-level">مستوى 1</span>
+                </div>
+                <div class="header-stats">
+                    <span id="header-gold">💰 0</span>
+                    <span id="header-hp">❤️ 100</span>
+                </div>
+                <button class="menu-toggle" onclick="game.toggleMenu()">☰</button>
+            </div>
+
+            <div class="mood-bar">
+                <span id="mood-icon">😊</span>
+                <span id="mood-text">سعيد</span>
+                <div class="mood-meter"><div id="mood-fill" class="mood-fill"></div></div>
+                <span id="mood-value" class="mood-value-num">70</span>
+            </div>
+
+            <div class="stat-bars">
+                <div class="stat-bar">
+                    <span id="str-value" class="stat-value">10</span>
+                    <div class="bar-container"><div id="str-bar" class="bar str"></div></div>
+                    <span class="stat-label">قوة 💪</span>
+                </div>
+                <div class="stat-bar">
+                    <span id="int-value" class="stat-value">10</span>
+                    <div class="bar-container"><div id="int-bar" class="bar int"></div></div>
+                    <span class="stat-label">ذكاء 🧠</span>
+                </div>
+                <div class="stat-bar">
+                    <span id="agi-value" class="stat-value">10</span>
+                    <div class="bar-container"><div id="agi-bar" class="bar agi"></div></div>
+                    <span class="stat-label">رشاقة 🏃</span>
+                </div>
+                <div class="stat-bar">
+                    <span id="cha-value" class="stat-value">10</span>
+                    <div class="bar-container"><div id="cha-bar" class="bar cha"></div></div>
+                    <span class="stat-label">كاريزما 💬</span>
+                </div>
+                <div class="stat-bar">
+                    <span id="lck-value" class="stat-value">10</span>
+                    <div class="bar-container"><div id="lck-bar" class="bar lck"></div></div>
+                    <span class="stat-label">حظ 🍀</span>
+                </div>
+            </div>
+
+            <div id="game-menu" class="game-menu hidden">
+                <button onclick="game.showStatus()">📋 حالة الشخصية</button>
+                <button onclick="game.showQuestLog()">📜 سجل المهام</button>
+                <button onclick="game.showAchievements()">🏆 الإنجازات</button>
+                <button onclick="game.saveGame()">💾 حفظ اللعبة</button>
+                <button onclick="location.reload()">🏠 القائمة الرئيسية</button>
+            </div>
+
+            <div id="story-log" class="story-log"></div>
+
+            <div id="action-panel" class="action-panel"></div>
+
+            <nav class="bottom-nav">
+                <button class="nav-btn active" data-tab="story" onclick="game.switchTab('story')">📖 القصة</button>
+                <button class="nav-btn" data-tab="inventory" onclick="game.switchTab('inventory')">🎒 المخزون</button>
+                <button class="nav-btn" data-tab="relationships" onclick="game.switchTab('relationships')">💕 الفريق</button>
+                <button class="nav-btn" data-tab="family" onclick="game.switchTab('family')">👨‍👩‍👧 العائلة</button>
+                <button class="nav-btn" data-tab="stats" onclick="game.switchTab('stats')">📊 الإحصائيات</button>
+            </nav>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameover-screen" class="screen">
+            <div class="gameover-content">
+                <h1>💀 انتهت اللعبة 💀</h1>
+                <div id="death-cause" class="death-cause"></div>
+                <div id="life-summary" class="life-summary"></div>
+                <button class="menu-btn" onclick="location.reload()">🔄 حاول مرة أخرى</button>
+            </div>
+        </div>
+
+        <!-- Notification Toast -->
+        <div id="notification" class="notification hidden"></div>
+    </div>
+
+    <script src="data-ar.js"></script>
+    <script src="engine-ar.js"></script>
+    <script src="events-ar.js"></script>
+    <script src="game-ar.js"></script>
+</body>
+</html>

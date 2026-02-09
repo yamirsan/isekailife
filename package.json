@@ -1,0 +1,16 @@
+{
+  "name": "bitlife-anime-style",
+  "version": "1.0.0",
+  "main": "data.js",
+  "scripts": {
+    "dev": "live-server --port=3000 --host=0.0.0.0 --no-browser",
+    "start": "live-server --port=3000 --host=0.0.0.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}
