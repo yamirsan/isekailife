@@ -801,6 +801,7 @@ class GameEngine {
         let html = '';
 
         html += '<div class="section-header">👨‍👩‍👧 Family</div>';
+        html += '<div style="text-align:center;font-size:0.8rem;opacity:0.6;margin-bottom:8px;">Tap a family member to view details</div>';
 
         // Spouse Section (with full data)
         if (s.married && s.marriedToData) {
@@ -809,7 +810,7 @@ class GameEngine {
             const spouse = s.marriedToData;
             const spouseAgeDisplay = spouse.spouseAge ? ` • Age ${spouse.spouseAge}` : '';
             html += `
-                <div class="family-member-card">
+                <div class="family-member-card" onclick="game.showFamilyDetail('spouse')" style="cursor:pointer;">
                     <div class="family-avatar">${spouse.gender === 'male' ? '🤵' : '👰'}</div>
                     <div class="family-info">
                         <div class="family-name">${spouse.fullName || spouse.name}</div>
@@ -845,7 +846,7 @@ class GameEngine {
             
             if (father) {
                 html += `
-                    <div class="family-member-card ${father.alive ? '' : 'deceased'}">
+                    <div class="family-member-card ${father.alive ? '' : 'deceased'}" onclick="game.showFamilyDetail('father')" style="cursor:pointer;">
                         <div class="family-avatar">👨</div>
                         <div class="family-info">
                             <div class="family-name">${father.firstName} ${father.lastName}</div>
@@ -858,7 +859,7 @@ class GameEngine {
             
             if (mother) {
                 html += `
-                    <div class="family-member-card ${mother.alive ? '' : 'deceased'}">
+                    <div class="family-member-card ${mother.alive ? '' : 'deceased'}" onclick="game.showFamilyDetail('mother')" style="cursor:pointer;">
                         <div class="family-avatar">👩</div>
                         <div class="family-info">
                             <div class="family-name">${mother.firstName} ${mother.lastName}</div>
@@ -876,10 +877,10 @@ class GameEngine {
         html += '<div class="family-section-title">👫 Siblings</div>';
         
         if (s.siblings && s.siblings.length > 0) {
-            s.siblings.forEach(sib => {
+            s.siblings.forEach((sib, i) => {
                 const sibAge = s.age + sib.age;
                 html += `
-                    <div class="family-member-card ${sib.alive ? '' : 'deceased'}">
+                    <div class="family-member-card ${sib.alive ? '' : 'deceased'}" onclick="game.showFamilyDetail('sibling', ${i})" style="cursor:pointer;">
                         <div class="family-avatar">${sib.gender === 'male' ? '👦' : '👧'}</div>
                         <div class="family-info">
                             <div class="family-name">${sib.name} ${s.lastName}</div>
@@ -898,10 +899,10 @@ class GameEngine {
         if (s.children && s.children.length > 0) {
             html += '<div class="family-section">';
             html += '<div class="family-section-title">👶 Children</div>';
-            s.children.forEach(child => {
+            s.children.forEach((child, i) => {
                 const childAge = s.age - child.bornAtAge;
                 html += `
-                    <div class="family-member-card">
+                    <div class="family-member-card" onclick="game.showFamilyDetail('child', ${i})" style="cursor:pointer;">
                         <div class="family-avatar">${child.gender === 'male' ? '👦' : '👧'}</div>
                         <div class="family-info">
                             <div class="family-name">${child.name} ${s.lastName}</div>
@@ -915,6 +916,156 @@ class GameEngine {
         }
 
         panel.innerHTML = html;
+    }
+
+    // ============ FAMILY MEMBER DETAIL VIEW ============
+    showFamilyDetail(type, index) {
+        const panel = document.getElementById('action-panel');
+        const s = this.state;
+        let html = '';
+
+        // Generate deterministic traits for family members
+        const traits = ['Kind', 'Brave', 'Wise', 'Gentle', 'Strict', 'Cheerful', 'Protective', 'Calm', 'Energetic', 'Loving', 'Strong-willed', 'Adventurous', 'Patient', 'Creative', 'Loyal'];
+        const hobbies = ['Cooking', 'Reading', 'Gardening', 'Swordsmanship', 'Magic Study', 'Fishing', 'Crafting', 'Singing', 'Painting', 'Herbalism', 'Archery', 'Stargazing', 'Storytelling', 'Meditation'];
+        
+        const seededRandom = (seed) => {
+            let h = seed;
+            return () => { h = (h * 16807 + 0) % 2147483647; return (h - 1) / 2147483646; };
+        };
+
+        if (type === 'spouse') {
+            const spouse = s.marriedToData;
+            if (!spouse) return;
+            const genderIcon = spouse.gender === 'male' ? '♂ 🤵' : '♀ 👰';
+            const spouseTitle = spouse.gender === 'male' ? 'Husband' : 'Wife';
+            const rng = seededRandom((spouse.name || '').length * 31 + 7);
+            const trait1 = traits[Math.floor(rng() * traits.length)];
+            const trait2 = traits[Math.floor(rng() * traits.length)];
+            const hobby = hobbies[Math.floor(rng() * hobbies.length)];
+            const happinessBar = Math.min(100, spouse.affection || 0);
+
+            html = `
+                <div class="section-header">${genderIcon} ${spouse.fullName || spouse.name}</div>
+                <div class="log-entry normal">
+                    <p><strong>${spouse.fullName || spouse.name}</strong></p>
+                    <p>Relationship: ${spouseTitle} 💒</p>
+                    <p>Gender: ${spouse.gender === 'male' ? 'Male ♂' : 'Female ♀'}</p>
+                    ${spouse.spouseAge ? `<p>Age: ${spouse.spouseAge}</p>` : ''}
+                    <p>Class: ${spouse.typeName || spouse.type}</p>
+                    <p>Personality: ${spouse.personality}</p>
+                    <p>Traits: ${trait1}, ${trait2}</p>
+                    <p>Hobby: ${hobby}</p>
+                    <p>Status: ❤️ Alive</p>
+                </div>
+                <div style="margin: 8px 0;">
+                    <small>💕 Love: ${happinessBar}%</small>
+                    <div class="rel-bar"><div class="rel-fill" style="width: ${happinessBar}%; background: linear-gradient(90deg, #ff6b9d, #ff3366);"></div></div>
+                </div>
+                <button class="choice-btn" onclick="game.showFamily()">← Back to Family</button>
+            `;
+        } else if (type === 'father' || type === 'mother') {
+            const parent = type === 'father' ? s.parents?.father : s.parents?.mother;
+            if (!parent) return;
+            const icon = type === 'father' ? '👨' : '👩';
+            const genderLabel = type === 'father' ? 'Male ♂' : 'Female ♀';
+            const rng = seededRandom((parent.firstName || '').length * 37 + (type === 'father' ? 13 : 23));
+            const trait1 = traits[Math.floor(rng() * traits.length)];
+            const trait2 = traits[Math.floor(rng() * traits.length)];
+            const hobby = hobbies[Math.floor(rng() * hobbies.length)];
+            const job = type === 'father' 
+                ? this.randomPickSeeded(['Blacksmith', 'Merchant', 'Farmer', 'Guard', 'Scholar', 'Healer', 'Knight', 'Hunter', 'Carpenter', 'Fisherman'], rng)
+                : this.randomPickSeeded(['Herbalist', 'Seamstress', 'Merchant', 'Healer', 'Teacher', 'Cook', 'Priestess', 'Farmer', 'Midwife', 'Innkeeper'], rng);
+            const happiness = parent.alive ? this.randomPickSeeded([60, 65, 70, 75, 80, 85, 90], rng) : 0;
+
+            html = `
+                <div class="section-header">${icon} ${parent.firstName} ${parent.lastName}</div>
+                <div class="log-entry normal">
+                    <p><strong>${parent.firstName} ${parent.lastName}</strong></p>
+                    <p>Relationship: ${parent.relation}</p>
+                    <p>Gender: ${genderLabel}</p>
+                    <p>Age: ${parent.age}</p>
+                    <p>Occupation: ${job}</p>
+                    <p>Traits: ${trait1}, ${trait2}</p>
+                    <p>Hobby: ${hobby}</p>
+                    <p>Status: ${parent.alive ? '❤️ Alive' : '💀 Deceased'}</p>
+                </div>
+                ${parent.alive ? `
+                <div style="margin: 8px 0;">
+                    <small>😊 Happiness: ${happiness}%</small>
+                    <div class="rel-bar"><div class="rel-fill" style="width: ${happiness}%; background: linear-gradient(90deg, #4ecdc4, #44a08d);"></div></div>
+                </div>` : ''}
+                <button class="choice-btn" onclick="game.showFamily()">← Back to Family</button>
+            `;
+        } else if (type === 'sibling') {
+            const sib = s.siblings?.[index];
+            if (!sib) return;
+            const sibAge = Math.max(0, s.age + sib.age);
+            const icon = sib.gender === 'male' ? '👦' : '👧';
+            const genderLabel = sib.gender === 'male' ? 'Male ♂' : 'Female ♀';
+            const rng = seededRandom((sib.name || '').length * 41 + index * 11);
+            const trait1 = traits[Math.floor(rng() * traits.length)];
+            const trait2 = traits[Math.floor(rng() * traits.length)];
+            const hobby = hobbies[Math.floor(rng() * hobbies.length)];
+            const affectionBar = Math.min(100, sib.affection || 50);
+
+            html = `
+                <div class="section-header">${icon} ${sib.name} ${s.lastName}</div>
+                <div class="log-entry normal">
+                    <p><strong>${sib.name} ${s.lastName}</strong></p>
+                    <p>Relationship: ${sib.relation}</p>
+                    <p>Gender: ${genderLabel}</p>
+                    <p>Age: ${sibAge}</p>
+                    <p>Traits: ${trait1}, ${trait2}</p>
+                    <p>Hobby: ${hobby}</p>
+                    <p>Status: ${sib.alive ? '❤️ Alive' : '💀 Deceased'}</p>
+                </div>
+                <div style="margin: 8px 0;">
+                    <small>💛 Affection: ${affectionBar}%</small>
+                    <div class="rel-bar"><div class="rel-fill" style="width: ${affectionBar}%; background: linear-gradient(90deg, #f7dc6f, #f39c12);"></div></div>
+                </div>
+                <button class="choice-btn" onclick="game.showFamily()">← Back to Family</button>
+            `;
+        } else if (type === 'child') {
+            const child = s.children?.[index];
+            if (!child) return;
+            const childAge = Math.max(0, s.age - child.bornAtAge);
+            const icon = child.gender === 'male' ? '👦' : '👧';
+            const genderLabel = child.gender === 'male' ? 'Male ♂' : 'Female ♀';
+            const childTitle = child.gender === 'male' ? 'Son' : 'Daughter';
+            const rng = seededRandom((child.name || '').length * 53 + index * 17);
+            const trait1 = traits[Math.floor(rng() * traits.length)];
+            const trait2 = traits[Math.floor(rng() * traits.length)];
+            const hobby = hobbies[Math.floor(rng() * hobbies.length)];
+            const childPhase = childAge < 3 ? 'Baby 👶' : childAge < 10 ? 'Child 🧒' : childAge < 18 ? 'Teen 🧑' : 'Adult 🧑‍🦱';
+            const happinessBar = Math.min(100, 60 + Math.floor(rng() * 40));
+
+            html = `
+                <div class="section-header">${icon} ${child.name} ${s.lastName}</div>
+                <div class="log-entry normal">
+                    <p><strong>${child.name} ${s.lastName}</strong></p>
+                    <p>Relationship: ${childTitle}</p>
+                    <p>Gender: ${genderLabel}</p>
+                    <p>Age: ${childAge}</p>
+                    <p>Life Stage: ${childPhase}</p>
+                    <p>Traits: ${trait1}, ${trait2}</p>
+                    ${childAge >= 5 ? `<p>Hobby: ${hobby}</p>` : ''}
+                    ${s.marriedToData ? `<p>Mother/Father: ${s.marriedToData.fullName || s.marriedToData.name}</p>` : ''}
+                    <p>Status: ❤️ Alive</p>
+                </div>
+                <div style="margin: 8px 0;">
+                    <small>😊 Happiness: ${happinessBar}%</small>
+                    <div class="rel-bar"><div class="rel-fill" style="width: ${happinessBar}%; background: linear-gradient(90deg, #a8e6cf, #88d8b0);"></div></div>
+                </div>
+                <button class="choice-btn" onclick="game.showFamily()">← Back to Family</button>
+            `;
+        }
+
+        panel.innerHTML = html;
+    }
+
+    // Helper: seeded random pick from array
+    randomPickSeeded(arr, rng) {
+        return arr[Math.floor(rng() * arr.length)];
     }
 
     // ============ STATS DEVELOPMENT TAB ============
