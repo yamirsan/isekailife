@@ -416,6 +416,7 @@ class GameEngine {
             married: false,
             marriedTo: null,
             marriedToData: null,
+            children: [],
             isDead: false,
             deathCause: null,
             isChild: true,
@@ -570,6 +571,7 @@ class GameEngine {
             married: false,
             marriedTo: null,
             marriedToData: null,
+            children: [],
             isDead: false,
             deathCause: null,
             isChild: true,
@@ -891,6 +893,26 @@ class GameEngine {
         }
         html += '</div>';
 
+        // Children Section
+        if (s.children && s.children.length > 0) {
+            html += '<div class="family-section">';
+            html += '<div class="family-section-title">👶 Children</div>';
+            s.children.forEach(child => {
+                const childAge = s.age - child.bornAtAge;
+                html += `
+                    <div class="family-member-card">
+                        <div class="family-avatar">${child.gender === 'male' ? '👦' : '👧'}</div>
+                        <div class="family-info">
+                            <div class="family-name">${child.name} ${s.lastName}</div>
+                            <div class="family-details">${child.gender === 'male' ? 'Son' : 'Daughter'} • Age ${Math.max(0, childAge)}</div>
+                        </div>
+                        <span class="family-status alive">❤️ Alive</span>
+                    </div>
+                `;
+            });
+            html += '</div>';
+        }
+
         panel.innerHTML = html;
     }
 
@@ -1200,6 +1222,7 @@ class GameEngine {
             if (this.state.locationYears === undefined) this.state.locationYears = 0;
             if (this.state.locationEvents === undefined) this.state.locationEvents = 0;
             if (this.state.marriedToData === undefined) this.state.marriedToData = null;
+            if (!this.state.children) this.state.children = [];
             // Add gender to old relationships
             if (this.state.relationships) {
                 this.state.relationships.forEach(r => {

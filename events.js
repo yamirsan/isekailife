@@ -678,6 +678,55 @@ GameEngine.prototype.triggerSpouseEvent = function() {
     if (event.mood > 0) {
         spouse.affection = Math.min(100, spouse.affection + 1);
     }
+    
+    // Chance to have a child
+    this.triggerChildbirthEvent();
+};
+
+// ============ CHILDBIRTH SYSTEM ============
+GameEngine.prototype.triggerChildbirthEvent = function() {
+    const s = this.state;
+    if (!s.married || !s.marriedToData) return;
+    if (!s.children) s.children = [];
+    
+    // Max 5 children, must be at least age 20, cooldown of 2 years between children
+    if (s.children.length >= 5) return;
+    if (s.age < 20) return;
+    if (s.age > 45) return;
+    
+    const lastChildAge = s.children.length > 0 ? s.children[s.children.length - 1].bornAtAge : 0;
+    if (s.age - lastChildAge < 2 && s.children.length > 0) return;
+    
+    // 25% chance per eligible year
+    if (!this.chance(25)) return;
+    
+    const childGender = this.chance(50) ? 'male' : 'female';
+    const namePool = childGender === 'male' ? DATA.firstNamesMale : DATA.firstNamesFemale;
+    
+    // Avoid duplicate names
+    const usedNames = s.children.map(c => c.name);
+    let childName;
+    let attempts = 0;
+    do {
+        childName = this.randomPick(namePool);
+        attempts++;
+    } while (usedNames.includes(childName) && attempts < 20);
+    
+    const child = {
+        name: childName,
+        gender: childGender,
+        bornAtAge: s.age,
+    };
+    
+    s.children.push(child);
+    
+    const spouseName = s.marriedToData.name;
+    const childType = childGender === 'male' ? 'son' : 'daughter';
+    const childIcon = childGender === 'male' ? '👦' : '👧';
+    
+    this.addLogEntry(`${childIcon} Amazing news! You and ${spouseName} had a baby ${childType}! You named them ${childName}.`, 'special');
+    this.modifyMood(20, `A new member of the family!`);
+    this.modifyStat('cha', 2);
 };
 
 // ============ RANDOM PARTY MEMBER MEETING ============
@@ -1292,6 +1341,9 @@ GameEngine.prototype.acceptMarriage = function(name) {
             icon: partner.icon,
             affection: 100
         };
+        // Remove spouse from party — they move to the Family tab
+        const idx = this.state.relationships.indexOf(partner);
+        if (idx !== -1) this.state.relationships.splice(idx, 1);
     }
     const spouseTitle = partner?.gender === 'male' ? 'husband' : partner?.gender === 'female' ? 'wife' : 'spouse';
     this.addLogEntry(`💒 You married ${name}! Your ${spouseTitle} is now part of your family. A beautiful ceremony was held in ${this.getLocationName(this.state.currentLocation)}.`, 'romance');
@@ -1572,8 +1624,8 @@ GameEngine.prototype.doExplore = function() {
 GameEngine.prototype.showRelationships = function() {
     const panel = document.getElementById('action-panel');
     
-    const activeRels = this.state.relationships.filter(r => r.active !== false);
-    const departedRels = this.state.relationships.filter(r => r.active === false);
+    const activeRels = this.state.relationships.filter(r => r.active !== false && r.name !== this.state.marriedTo);
+    const departedRels = this.state.relationships.filter(r => r.active === false && r.name !== this.state.marriedTo);
     
     if (activeRels.length === 0 && departedRels.length === 0) {
         panel.innerHTML = `
@@ -1700,6 +1752,10 @@ GameEngine.prototype.proposeTo = function(index) {
         this.modifyStat('cha', 5);
         this.modifyFame(30);
         this.modifyMood(25, "The happiest day of your life!");
+        // Remove spouse from party — they move to the Family tab
+        this.state.relationships.splice(index, 1);
+        this.showRelationships();
+        return;
     } else {
         rel.affection -= 10;
         this.addLogEntry(`💔 ${rel.name} wasn't ready yet...`, 'negative');

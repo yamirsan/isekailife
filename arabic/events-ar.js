@@ -678,6 +678,55 @@ GameEngine.prototype.triggerSpouseEvent = function() {
     if (event.mood > 0) {
         spouse.affection = Math.min(100, spouse.affection + 1);
     }
+    
+    // فرصة لإنجاب طفل
+    this.triggerChildbirthEvent();
+};
+
+// ============ نظام الإنجاب ============
+GameEngine.prototype.triggerChildbirthEvent = function() {
+    const s = this.state;
+    if (!s.married || !s.marriedToData) return;
+    if (!s.children) s.children = [];
+    
+    // حد أقصى 5 أطفال، يجب أن يكون العمر 20 على الأقل، فترة انتظار سنتين بين الأطفال
+    if (s.children.length >= 5) return;
+    if (s.age < 20) return;
+    if (s.age > 45) return;
+    
+    const lastChildAge = s.children.length > 0 ? s.children[s.children.length - 1].bornAtAge : 0;
+    if (s.age - lastChildAge < 2 && s.children.length > 0) return;
+    
+    // 25% فرصة كل سنة مؤهلة
+    if (!this.chance(25)) return;
+    
+    const childGender = this.chance(50) ? 'male' : 'female';
+    const namePool = childGender === 'male' ? DATA.firstNamesMale : DATA.firstNamesFemale;
+    
+    // تجنب تكرار الأسماء
+    const usedNames = s.children.map(c => c.name);
+    let childName;
+    let attempts = 0;
+    do {
+        childName = this.randomPick(namePool);
+        attempts++;
+    } while (usedNames.includes(childName) && attempts < 20);
+    
+    const child = {
+        name: childName,
+        gender: childGender,
+        bornAtAge: s.age,
+    };
+    
+    s.children.push(child);
+    
+    const spouseName = s.marriedToData.name;
+    const childType = childGender === 'male' ? 'ابن' : 'ابنة';
+    const childIcon = childGender === 'male' ? '👦' : '👧';
+    
+    this.addLogEntry(`${childIcon} خبر رائع! أنت و${spouseName} رُزقتما بـ${childType}! سميتموه ${childName}.`, 'special');
+    this.modifyMood(20, `فرد جديد في العائلة!`);
+    this.modifyStat('cha', 2);
 };
 
 // ============ لقاء عضو فريق عشوائي ============
@@ -1284,6 +1333,9 @@ GameEngine.prototype.acceptMarriage = function(name) {
             icon: partner.icon,
             affection: 100
         };
+        // إزالة الزوج/الزوجة من الفريق — ينتقل لتبويب العائلة
+        const idx = this.state.relationships.indexOf(partner);
+        if (idx !== -1) this.state.relationships.splice(idx, 1);
     }
     const spouseTitle = partner?.gender === 'male' ? 'زوجك' : partner?.gender === 'female' ? 'زوجتك' : 'شريك حياتك';
     this.addLogEntry(`💒 تزوجت ${name}! ${spouseTitle} الآن جزء من عائلتك. أُقيم حفل زفاف جميل في ${this.getLocationName(this.state.currentLocation)}.`, 'romance');
@@ -1563,8 +1615,8 @@ GameEngine.prototype.doExplore = function() {
 GameEngine.prototype.showRelationships = function() {
     const panel = document.getElementById('action-panel');
     
-    const activeRels = this.state.relationships.filter(r => r.active !== false);
-    const departedRels = this.state.relationships.filter(r => r.active === false);
+    const activeRels = this.state.relationships.filter(r => r.active !== false && r.name !== this.state.marriedTo);
+    const departedRels = this.state.relationships.filter(r => r.active === false && r.name !== this.state.marriedTo);
     
     if (activeRels.length === 0 && departedRels.length === 0) {
         panel.innerHTML = `
@@ -1691,6 +1743,10 @@ GameEngine.prototype.proposeTo = function(index) {
         this.modifyStat('cha', 5);
         this.modifyFame(30);
         this.modifyMood(25, "أسعد يوم في حياتك!");
+        // إزالة الزوج/الزوجة من الفريق — ينتقل لتبويب العائلة
+        this.state.relationships.splice(index, 1);
+        this.showRelationships();
+        return;
     } else {
         rel.affection -= 10;
         this.addLogEntry(`💔 ${rel.name} لم يكن مستعداً بعد...`, 'negative');

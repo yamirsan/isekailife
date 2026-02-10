@@ -388,6 +388,7 @@ class GameEngine {
             married: false,
             marriedTo: null,
             marriedToData: null,
+            children: [],
             isDead: false,
             deathCause: null,
             isChild: true,
@@ -521,6 +522,7 @@ class GameEngine {
             married: false,
             marriedTo: null,
             marriedToData: null,
+            children: [],
             isDead: false,
             deathCause: null,
             isChild: true,
@@ -826,6 +828,26 @@ class GameEngine {
         }
         html += '</div>';
 
+        // قسم الأبناء
+        if (s.children && s.children.length > 0) {
+            html += '<div class="family-section">';
+            html += '<div class="family-section-title">👶 الأبناء</div>';
+            s.children.forEach(child => {
+                const childAge = s.age - child.bornAtAge;
+                html += `
+                    <div class="family-member-card">
+                        <div class="family-avatar">${child.gender === 'male' ? '👦' : '👧'}</div>
+                        <div class="family-info">
+                            <div class="family-name">${child.name} ${s.lastName}</div>
+                            <div class="family-details">${child.gender === 'male' ? 'ابن' : 'ابنة'} • العمر ${Math.max(0, childAge)}</div>
+                        </div>
+                        <span class="family-status alive">❤️ حي</span>
+                    </div>
+                `;
+            });
+            html += '</div>';
+        }
+
         panel.innerHTML = html;
     }
 
@@ -1128,6 +1150,7 @@ class GameEngine {
             if (this.state.locationYears === undefined) this.state.locationYears = 0;
             if (this.state.locationEvents === undefined) this.state.locationEvents = 0;
             if (this.state.marriedToData === undefined) this.state.marriedToData = null;
+            if (!this.state.children) this.state.children = [];
             if (this.state.relationships) {
                 this.state.relationships.forEach(r => {
                     if (!r.gender) r.gender = this.randomPick(['male', 'female']);
