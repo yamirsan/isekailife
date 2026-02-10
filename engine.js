@@ -807,14 +807,15 @@ class GameEngine {
             html += '<div class="family-section">';
             html += '<div class="family-section-title">💒 Spouse</div>';
             const spouse = s.marriedToData;
+            const spouseAgeDisplay = spouse.spouseAge ? ` • Age ${spouse.spouseAge}` : '';
             html += `
                 <div class="family-member-card">
                     <div class="family-avatar">${spouse.gender === 'male' ? '🤵' : '👰'}</div>
                     <div class="family-info">
                         <div class="family-name">${spouse.fullName || spouse.name}</div>
-                        <div class="family-details">${spouse.gender === 'male' ? 'Husband' : 'Wife'} • ${spouse.typeName || spouse.type} ${spouse.personality}</div>
+                        <div class="family-details">${spouse.gender === 'male' ? 'Husband' : 'Wife'}${spouseAgeDisplay} • ${spouse.typeName || spouse.type} ${spouse.personality}</div>
                     </div>
-                    <span class="family-status alive">💕 ${spouse.affection}%</span>
+                    <span class="family-status alive">💕 ${spouse.affection}% • ❤️ Alive</span>
                 </div>
             `;
             html += '</div>';
@@ -1382,6 +1383,27 @@ class GameEngine {
                     this.modifyMood(-15, `Losing ${sib.name} makes you very sad...`);
                 }
             });
+        }
+
+        // Age up party members
+        if (this.state.relationships) {
+            this.state.relationships.forEach(rel => {
+                if (rel.active !== false) {
+                    if (!rel.memberAge) rel.memberAge = this.state.age + this.randomInt(-5, 5);
+                    rel.memberAge++;
+                }
+            });
+        }
+
+        // Age up children
+        // (Children age is calculated from bornAtAge, no explicit increment needed)
+
+        // Age up spouse
+        if (this.state.marriedToData) {
+            if (!this.state.marriedToData.spouseAge) {
+                this.state.marriedToData.spouseAge = this.state.age + this.randomInt(-3, 3);
+            }
+            this.state.marriedToData.spouseAge++;
         }
     }
 }

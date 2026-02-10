@@ -509,7 +509,11 @@ GameEngine.prototype.triggerElderEvent = function() {
 
 // ============ ROMANCE HINTS ============
 GameEngine.prototype.triggerRomanceHint = function() {
-    const activeRels = this.state.relationships.filter(r => r.active !== false);
+    const playerGender = this.state.gender;
+    const activeRels = this.state.relationships.filter(r => 
+        r.active !== false &&
+        ((playerGender === 'male' && r.gender === 'female') || (playerGender === 'female' && r.gender === 'male'))
+    );
     if (activeRels.length === 0) return;
     const rel = this.randomPick(activeRels);
     
@@ -818,7 +822,10 @@ GameEngine.prototype.meetPartyMemberByData = function(member) {
         genderIcon: member.genderIcon || genderIcon || '',
         active: member.active !== undefined ? member.active : true,
         metAge: member.metAge || this.state.age,
+        memberAge: member.memberAge || (this.state.age + this.randomInt(-5, 5)),
         level: member.level || Math.max(1, this.state.level + this.randomInt(-3, 3)),
+        inLove: false,
+        dating: false,
     });
 
     this.modifyStat('cha', 1);
@@ -937,6 +944,16 @@ GameEngine.prototype.triggerRandomEvents = function() {
     // Marriage proposal at high affection
     if (age >= 18 && !this.state.married && this.chance(10)) {
         this.triggerMarriageEvent();
+    }
+    
+    // Party member asks player on a date
+    if (age >= 16 && !this.state.married && this.chance(12)) {
+        this.triggerPartyMemberDateRequest();
+    }
+    
+    // Party member confesses love
+    if (age >= 16 && !this.state.married && this.chance(10)) {
+        this.triggerPartyMemberLoveConfession();
     }
 };
 
@@ -1307,7 +1324,11 @@ GameEngine.prototype.triggerDemonLordEvent = function() {
 };
 
 GameEngine.prototype.triggerMarriageEvent = function() {
-    const eligible = this.state.relationships.filter(r => r.affection >= 80 && r.active !== false);
+    const playerGender = this.state.gender;
+    const eligible = this.state.relationships.filter(r => 
+        r.affection >= 80 && r.active !== false && r.inLove &&
+        ((playerGender === 'male' && r.gender === 'female') || (playerGender === 'female' && r.gender === 'male'))
+    );
     if (eligible.length === 0) return;
     
     const partner = this.randomPick(eligible);
@@ -1339,7 +1360,8 @@ GameEngine.prototype.acceptMarriage = function(name) {
             type: partner.type,
             personality: partner.personality,
             icon: partner.icon,
-            affection: 100
+            affection: 100,
+            spouseAge: partner.memberAge || this.state.age
         };
         // Remove spouse from party — they move to the Family tab
         const idx = this.state.relationships.indexOf(partner);
@@ -1641,12 +1663,14 @@ GameEngine.prototype.showRelationships = function() {
         const realIndex = this.state.relationships.indexOf(rel);
         const genderIcon = rel.gender === 'male' ? '♂' : rel.gender === 'female' ? '♀' : '';
         const genderLabel = rel.gender === 'male' ? 'Male' : rel.gender === 'female' ? 'Female' : '';
+        const ageDisplay = rel.memberAge ? `Age ${rel.memberAge}` : '';
+        const loveIcon = rel.inLove ? ' 💘' : (rel.dating ? ' 💑' : '');
         html += `
             <div class="relationship-card" onclick="game.interactWith(${realIndex})" style="cursor:pointer;">
                 <div class="rel-avatar">${rel.icon}</div>
                 <div class="rel-info">
-                    <div class="rel-name">${genderIcon} ${rel.name} ${this.state.marriedTo === rel.name ? '💒' : ''}</div>
-                    <div class="rel-type">${genderLabel ? genderLabel + ' • ' : ''}${rel.type} • ${rel.personality}${rel.level ? ' • Lv.' + rel.level : ''}</div>
+                    <div class="rel-name">${genderIcon} ${rel.name}${loveIcon}</div>
+                    <div class="rel-type">${genderLabel ? genderLabel + ' • ' : ''}${ageDisplay ? ageDisplay + ' • ' : ''}${rel.type} • ${rel.personality}${rel.level ? ' • Lv.' + rel.level : ''}</div>
                     <div class="rel-bar">
                         <div class="rel-fill" style="width: ${rel.affection}%"></div>
                     </div>
@@ -1682,6 +1706,15 @@ GameEngine.prototype.interactWith = function(index) {
     
     const genderIcon = rel.gender === 'male' ? '♂' : rel.gender === 'female' ? '♀' : '';
     const genderLabel = rel.gender === 'male' ? 'Male' : rel.gender === 'female' ? 'Female' : '';
+    const ageDisplay = rel.memberAge ? `Age: ${rel.memberAge}` : '';
+    const relationStatus = rel.inLove ? '💘 In Love' : (rel.dating ? '💑 Dating' : '');
+    
+    // Marriage only for opposite gender, age 18+, affection 80+
+    const playerGender = this.state.gender;
+    const isOppositeGender = (playerGender === 'male' && rel.gender === 'female') || (playerGender === 'female' && rel.gender === 'male');
+    const canPropose = rel.affection >= 80 && !this.state.married && this.state.age >= 18 && isOppositeGender && rel.inLove;
+    const canDate = !this.state.married && this.state.age >= 16 && isOppositeGender && rel.affection >= 40 && !rel.dating && !rel.inLove;
+    const canConfessLove = rel.dating && rel.affection >= 65 && !rel.inLove && isOppositeGender;
     
     const panel = document.getElementById('action-panel');
     panel.innerHTML = `
@@ -1689,14 +1722,18 @@ GameEngine.prototype.interactWith = function(index) {
         <div class="log-entry normal">
             <p><strong>${rel.fullName || rel.name}</strong></p>
             ${genderLabel ? `<p>Gender: ${genderLabel} ${genderIcon}</p>` : ''}
+            ${ageDisplay ? `<p>${ageDisplay}</p>` : ''}
             <p>Class: ${rel.type} • ${rel.personality}</p>
             ${rel.level ? `<p>Level: ${rel.level}</p>` : ''}
             <p>Affection: ${rel.affection}%</p>
+            ${relationStatus ? `<p>Status: ${relationStatus}</p>` : ''}
         </div>
         <button class="choice-btn" onclick="game.talkTo(${index})">💬 Talk</button>
         <button class="choice-btn" onclick="game.giftTo(${index})">🎁 Give Gift (-100G)</button>
         <button class="choice-btn" onclick="game.trainWith(${index})">⚔️ Train Together</button>
-        ${rel.affection >= 80 && !this.state.married ? `<button class="choice-btn" onclick="game.proposeTo(${index})">💒 Propose Marriage</button>` : ''}
+        ${canDate ? `<button class="choice-btn" onclick="game.askOnDate(${index})">💕 Ask on a Date</button>` : ''}
+        ${canConfessLove ? `<button class="choice-btn" onclick="game.confessLove(${index})">💘 Confess Your Love</button>` : ''}
+        ${canPropose ? `<button class="choice-btn" onclick="game.proposeTo(${index})">💒 Propose Marriage</button>` : ''}
         <button class="choice-btn" onclick="game.showRelationships()">← Back</button>
     `;
 };
@@ -1734,6 +1771,15 @@ GameEngine.prototype.trainWith = function(index) {
 
 GameEngine.prototype.proposeTo = function(index) {
     const rel = this.state.relationships[index];
+    
+    // Guard: age 18+, opposite gender, in love
+    const playerGender = this.state.gender;
+    const isOppositeGender = (playerGender === 'male' && rel.gender === 'female') || (playerGender === 'female' && rel.gender === 'male');
+    if (this.state.age < 18 || !isOppositeGender || !rel.inLove) {
+        this.showNotification("Marriage requires being 18+, in love, and with the opposite gender.", 'danger');
+        return;
+    }
+    
     if (this.chance(rel.affection)) {
         this.state.married = true;
         this.state.marriedTo = rel.name;
@@ -1744,7 +1790,8 @@ GameEngine.prototype.proposeTo = function(index) {
             type: rel.type,
             personality: rel.personality,
             icon: rel.icon,
-            affection: 100
+            affection: 100,
+            spouseAge: rel.memberAge || this.state.age
         };
         rel.affection = 100;
         const spouseTitle = rel.gender === 'male' ? 'husband' : rel.gender === 'female' ? 'wife' : 'spouse';
@@ -1762,6 +1809,162 @@ GameEngine.prototype.proposeTo = function(index) {
         this.modifyMood(-12, "Rejection hurts...");
     }
     this.interactWith(index);
+};
+
+// ============ DATING SYSTEM ============
+GameEngine.prototype.askOnDate = function(index) {
+    const rel = this.state.relationships[index];
+    if (!rel) return;
+    
+    const successChance = Math.min(90, rel.affection + 10);
+    if (this.chance(successChance)) {
+        rel.dating = true;
+        rel.affection = Math.min(100, rel.affection + this.randomInt(5, 12));
+        const dateEvents = [
+            `💕 You asked ${rel.name} on a date and they said yes! You had a wonderful time walking through ${this.getLocationName(this.state.currentLocation)}.`,
+            `💕 ${rel.name} happily accepted your date invitation! You shared a meal and laughed all evening.`,
+            `💕 You and ${rel.name} went on a beautiful date! You watched the sunset together.`,
+        ];
+        this.addLogEntry(this.randomPick(dateEvents), 'romance');
+        this.modifyMood(10, `A wonderful date with ${rel.name}!`);
+    } else {
+        rel.affection -= 5;
+        this.addLogEntry(`😔 ${rel.name} turned down your date invitation... "Maybe another time."`, 'negative');
+        this.modifyMood(-5, null);
+    }
+    this.updateAllUI();
+    this.interactWith(index);
+};
+
+GameEngine.prototype.confessLove = function(index) {
+    const rel = this.state.relationships[index];
+    if (!rel) return;
+    
+    const successChance = Math.min(95, rel.affection);
+    if (this.chance(successChance)) {
+        rel.inLove = true;
+        rel.affection = Math.min(100, rel.affection + this.randomInt(10, 20));
+        this.addLogEntry(`💘 You confessed your love to ${rel.name}! "I... I feel the same way!" they said with tears of joy.`, 'romance');
+        this.modifyMood(15, `${rel.name} loves you back!`);
+    } else {
+        rel.affection -= 10;
+        rel.dating = false;
+        this.addLogEntry(`💔 ${rel.name} doesn't feel the same way... "I'm sorry, I just see you as a friend."`, 'negative');
+        this.modifyMood(-10, "Heartbreak...");
+    }
+    this.updateAllUI();
+    this.interactWith(index);
+};
+
+// ============ PARTY MEMBER ASKS PLAYER ON DATE ============
+GameEngine.prototype.triggerPartyMemberDateRequest = function() {
+    if (this.state.married || this.state.age < 16) return;
+    
+    const playerGender = this.state.gender;
+    const eligible = this.state.relationships.filter(r => 
+        r.active !== false && 
+        r.affection >= 45 && 
+        !r.dating && !r.inLove &&
+        ((playerGender === 'male' && r.gender === 'female') || (playerGender === 'female' && r.gender === 'male'))
+    );
+    if (eligible.length === 0) return;
+    
+    const rel = this.randomPick(eligible);
+    const relIndex = this.state.relationships.indexOf(rel);
+    const genderIcon = rel.gender === 'male' ? '♂' : '♀';
+    
+    this.pendingChoice = `
+        <div class="section-header">💕 A Special Request</div>
+        <div class="log-entry romance">
+            ${rel.icon} ${genderIcon} ${rel.name} approaches you nervously...<br>
+            <em>"Hey... I was wondering if... maybe you'd like to go on a date with me?"</em>
+        </div>
+        <button class="choice-btn" onclick="game.acceptDate(${relIndex})">💕 "I'd love to!"</button>
+        <button class="choice-btn" onclick="game.rejectDate(${relIndex})">😅 "Sorry, I'm not interested."</button>
+        <button class="choice-btn" onclick="game.showAgeActions()">🤔 "Let me think about it..." (Skip)</button>
+    `;
+    this.showAgeActions();
+};
+
+GameEngine.prototype.acceptDate = function(index) {
+    const rel = this.state.relationships[index];
+    if (!rel) { this.pendingChoice = null; this.showAgeActions(); return; }
+    
+    rel.dating = true;
+    rel.affection = Math.min(100, rel.affection + this.randomInt(8, 15));
+    this.addLogEntry(`💕 You accepted ${rel.name}'s date invitation! It was a magical evening.`, 'romance');
+    this.modifyMood(10, `A wonderful date!`);
+    this.pendingChoice = null;
+    this.updateAllUI();
+    this.showAgeActions();
+};
+
+GameEngine.prototype.rejectDate = function(index) {
+    const rel = this.state.relationships[index];
+    if (!rel) { this.pendingChoice = null; this.showAgeActions(); return; }
+    
+    rel.affection -= 8;
+    this.addLogEntry(`😔 You turned down ${rel.name}'s date request. They looked disappointed.`, 'negative');
+    this.modifyMood(-3, null);
+    this.pendingChoice = null;
+    this.updateAllUI();
+    this.showAgeActions();
+};
+
+// ============ PARTY MEMBER CONFESSES LOVE ============
+GameEngine.prototype.triggerPartyMemberLoveConfession = function() {
+    if (this.state.married) return;
+    
+    const playerGender = this.state.gender;
+    const eligible = this.state.relationships.filter(r => 
+        r.active !== false && 
+        r.dating && !r.inLove &&
+        r.affection >= 70 &&
+        ((playerGender === 'male' && r.gender === 'female') || (playerGender === 'female' && r.gender === 'male'))
+    );
+    if (eligible.length === 0) return;
+    
+    const rel = this.randomPick(eligible);
+    const relIndex = this.state.relationships.indexOf(rel);
+    const genderIcon = rel.gender === 'male' ? '♂' : '♀';
+    
+    this.pendingChoice = `
+        <div class="section-header">💘 A Love Confession!</div>
+        <div class="log-entry romance">
+            ${rel.icon} ${genderIcon} ${rel.name} takes your hand with a serious look...<br>
+            <em>"I... I've fallen in love with you. I can't hide it anymore. Do you feel the same?"</em>
+        </div>
+        <button class="choice-btn" onclick="game.acceptLoveConfession(${relIndex})">💘 "I love you too!"</button>
+        <button class="choice-btn" onclick="game.rejectLoveConfession(${relIndex})">💔 "I'm sorry... I don't feel that way."</button>
+        <button class="choice-btn" onclick="game.showAgeActions()">😅 "I need time..." (Skip)</button>
+    `;
+    this.showAgeActions();
+};
+
+GameEngine.prototype.acceptLoveConfession = function(index) {
+    const rel = this.state.relationships[index];
+    if (!rel) { this.pendingChoice = null; this.showAgeActions(); return; }
+    
+    rel.inLove = true;
+    rel.affection = Math.min(100, rel.affection + this.randomInt(10, 20));
+    this.addLogEntry(`💘 You and ${rel.name} are now in love! Your hearts beat as one.`, 'romance');
+    this.modifyMood(15, `In love with ${rel.name}!`);
+    this.pendingChoice = null;
+    this.updateAllUI();
+    this.showAgeActions();
+};
+
+GameEngine.prototype.rejectLoveConfession = function(index) {
+    const rel = this.state.relationships[index];
+    if (!rel) { this.pendingChoice = null; this.showAgeActions(); return; }
+    
+    rel.affection -= 15;
+    rel.dating = false;
+    this.addLogEntry(`💔 You rejected ${rel.name}'s love confession. They're heartbroken.`, 'negative');
+    this.modifyMood(-8, "A painful choice...");
+    this.pendingChoice = null;
+    this.updateAllUI();
+    this.showAgeActions();
 };
 
 // ============ INVENTORY TAB ============

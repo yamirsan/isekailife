@@ -509,7 +509,11 @@ GameEngine.prototype.triggerElderEvent = function() {
 
 // ============ تلميحات رومانسية ============
 GameEngine.prototype.triggerRomanceHint = function() {
-    const activeRels = this.state.relationships.filter(r => r.active !== false);
+    const playerGender = this.state.gender;
+    const activeRels = this.state.relationships.filter(r => 
+        r.active !== false &&
+        ((playerGender === 'male' && r.gender === 'female') || (playerGender === 'female' && r.gender === 'male'))
+    );
     if (activeRels.length === 0) return;
     const rel = this.randomPick(activeRels);
     
@@ -816,7 +820,10 @@ GameEngine.prototype.meetPartyMemberByData = function(member) {
         genderIcon: member.genderIcon || genderIcon || '',
         active: member.active !== undefined ? member.active : true,
         metAge: member.metAge || this.state.age,
+        memberAge: member.memberAge || (this.state.age + this.randomInt(-5, 5)),
         level: member.level || Math.max(1, this.state.level + this.randomInt(-3, 3)),
+        inLove: false,
+        dating: false,
     });
 
     this.modifyStat('cha', 1);
@@ -932,6 +939,16 @@ GameEngine.prototype.triggerRandomEvents = function() {
     // عرض زواج عند مودة عالية
     if (age >= 18 && !this.state.married && this.chance(10)) {
         this.triggerMarriageEvent();
+    }
+    
+    // عضو الفريق يطلب موعداً
+    if (age >= 16 && !this.state.married && this.chance(12)) {
+        this.triggerPartyMemberDateRequest();
+    }
+    
+    // عضو الفريق يعترف بحبه
+    if (age >= 16 && !this.state.married && this.chance(10)) {
+        this.triggerPartyMemberLoveConfession();
     }
 };
 
@@ -1299,7 +1316,11 @@ GameEngine.prototype.triggerDemonLordEvent = function() {
 };
 
 GameEngine.prototype.triggerMarriageEvent = function() {
-    const eligible = this.state.relationships.filter(r => r.affection >= 80 && r.active !== false);
+    const playerGender = this.state.gender;
+    const eligible = this.state.relationships.filter(r => 
+        r.affection >= 80 && r.active !== false && r.inLove &&
+        ((playerGender === 'male' && r.gender === 'female') || (playerGender === 'female' && r.gender === 'male'))
+    );
     if (eligible.length === 0) return;
     
     const partner = this.randomPick(eligible);
@@ -1331,7 +1352,8 @@ GameEngine.prototype.acceptMarriage = function(name) {
             type: partner.type,
             personality: partner.personality,
             icon: partner.icon,
-            affection: 100
+            affection: 100,
+            spouseAge: partner.memberAge || this.state.age
         };
         // إزالة الزوج/الزوجة من الفريق — ينتقل لتبويب العائلة
         const idx = this.state.relationships.indexOf(partner);
@@ -1632,12 +1654,14 @@ GameEngine.prototype.showRelationships = function() {
         const realIndex = this.state.relationships.indexOf(rel);
         const genderIcon = rel.gender === 'male' ? '♂' : rel.gender === 'female' ? '♀' : '';
         const genderLabel = rel.gender === 'male' ? 'ذكر' : rel.gender === 'female' ? 'أنثى' : '';
+        const ageDisplay = rel.memberAge ? `العمر ${rel.memberAge}` : '';
+        const loveIcon = rel.inLove ? ' 💘' : (rel.dating ? ' 💑' : '');
         html += `
             <div class="relationship-card" onclick="game.interactWith(${realIndex})" style="cursor:pointer;">
                 <div class="rel-avatar">${rel.icon}</div>
                 <div class="rel-info">
-                    <div class="rel-name">${genderIcon} ${rel.name} ${this.state.marriedTo === rel.name ? '💒' : ''}</div>
-                    <div class="rel-type">${genderLabel ? genderLabel + ' • ' : ''}${rel.type} • ${rel.personality}${rel.level ? ' • مس.' + rel.level : ''}</div>
+                    <div class="rel-name">${genderIcon} ${rel.name}${loveIcon}</div>
+                    <div class="rel-type">${genderLabel ? genderLabel + ' • ' : ''}${ageDisplay ? ageDisplay + ' • ' : ''}${rel.type} • ${rel.personality}${rel.level ? ' • مس.' + rel.level : ''}</div>
                     <div class="rel-bar">
                         <div class="rel-fill" style="width: ${rel.affection}%"></div>
                     </div>
@@ -1673,6 +1697,15 @@ GameEngine.prototype.interactWith = function(index) {
     
     const genderIcon = rel.gender === 'male' ? '♂' : rel.gender === 'female' ? '♀' : '';
     const genderLabel = rel.gender === 'male' ? 'ذكر' : rel.gender === 'female' ? 'أنثى' : '';
+    const ageDisplay = rel.memberAge ? `العمر: ${rel.memberAge}` : '';
+    const relationStatus = rel.inLove ? '💘 عاشق' : (rel.dating ? '💑 مواعدة' : '');
+    
+    // الزواج فقط للجنس المقابل، عمر 18+، في حالة حب
+    const playerGender = this.state.gender;
+    const isOppositeGender = (playerGender === 'male' && rel.gender === 'female') || (playerGender === 'female' && rel.gender === 'male');
+    const canPropose = rel.affection >= 80 && !this.state.married && this.state.age >= 18 && isOppositeGender && rel.inLove;
+    const canDate = !this.state.married && this.state.age >= 16 && isOppositeGender && rel.affection >= 40 && !rel.dating && !rel.inLove;
+    const canConfessLove = rel.dating && rel.affection >= 65 && !rel.inLove && isOppositeGender;
     
     const panel = document.getElementById('action-panel');
     panel.innerHTML = `
@@ -1680,14 +1713,18 @@ GameEngine.prototype.interactWith = function(index) {
         <div class="log-entry normal">
             <p><strong>${rel.fullName || rel.name}</strong></p>
             ${genderLabel ? `<p>الجنس: ${genderLabel} ${genderIcon}</p>` : ''}
+            ${ageDisplay ? `<p>${ageDisplay}</p>` : ''}
             <p>الفئة: ${rel.type} • ${rel.personality}</p>
             ${rel.level ? `<p>المستوى: ${rel.level}</p>` : ''}
             <p>المودة: ${rel.affection}%</p>
+            ${relationStatus ? `<p>الحالة: ${relationStatus}</p>` : ''}
         </div>
         <button class="choice-btn" onclick="game.talkTo(${index})">💬 تحدث</button>
         <button class="choice-btn" onclick="game.giftTo(${index})">🎁 أعطِ هدية (-100ذ)</button>
         <button class="choice-btn" onclick="game.trainWith(${index})">⚔️ تدرب معاً</button>
-        ${rel.affection >= 80 && !this.state.married ? `<button class="choice-btn" onclick="game.proposeTo(${index})">💒 اطلب الزواج</button>` : ''}
+        ${canDate ? `<button class="choice-btn" onclick="game.askOnDate(${index})">💕 اطلب موعد</button>` : ''}
+        ${canConfessLove ? `<button class="choice-btn" onclick="game.confessLove(${index})">💘 اعترف بحبك</button>` : ''}
+        ${canPropose ? `<button class="choice-btn" onclick="game.proposeTo(${index})">💒 اطلب الزواج</button>` : ''}
         <button class="choice-btn" onclick="game.showRelationships()">→ العودة</button>
     `;
 };
@@ -1725,6 +1762,15 @@ GameEngine.prototype.trainWith = function(index) {
 
 GameEngine.prototype.proposeTo = function(index) {
     const rel = this.state.relationships[index];
+    
+    // حماية: عمر 18+، جنس مقابل، في حالة حب
+    const playerGender = this.state.gender;
+    const isOppositeGender = (playerGender === 'male' && rel.gender === 'female') || (playerGender === 'female' && rel.gender === 'male');
+    if (this.state.age < 18 || !isOppositeGender || !rel.inLove) {
+        this.showNotification("الزواج يتطلب عمر 18+ وحب متبادل ومن الجنس المقابل.", 'danger');
+        return;
+    }
+    
     if (this.chance(rel.affection)) {
         this.state.married = true;
         this.state.marriedTo = rel.name;
@@ -1735,7 +1781,8 @@ GameEngine.prototype.proposeTo = function(index) {
             type: rel.type,
             personality: rel.personality,
             icon: rel.icon,
-            affection: 100
+            affection: 100,
+            spouseAge: rel.memberAge || this.state.age
         };
         rel.affection = 100;
         const spouseTitle = rel.gender === 'male' ? 'زوجك' : rel.gender === 'female' ? 'زوجتك' : 'شريك حياتك';
@@ -1753,6 +1800,162 @@ GameEngine.prototype.proposeTo = function(index) {
         this.modifyMood(-12, "الرفض مؤلم...");
     }
     this.interactWith(index);
+};
+
+// ============ نظام المواعدة ============
+GameEngine.prototype.askOnDate = function(index) {
+    const rel = this.state.relationships[index];
+    if (!rel) return;
+    
+    const successChance = Math.min(90, rel.affection + 10);
+    if (this.chance(successChance)) {
+        rel.dating = true;
+        rel.affection = Math.min(100, rel.affection + this.randomInt(5, 12));
+        const dateEvents = [
+            `💕 طلبت من ${rel.name} موعداً ووافق! قضيتما وقتاً رائعاً في التجول في ${this.getLocationName(this.state.currentLocation)}.`,
+            `💕 ${rel.name} قبل دعوتك بسعادة! تشاركتما وجبة وضحكتما طوال المساء.`,
+            `💕 أنت و${rel.name} خرجتما في موعد جميل! شاهدتما الغروب معاً.`,
+        ];
+        this.addLogEntry(this.randomPick(dateEvents), 'romance');
+        this.modifyMood(10, `موعد رائع مع ${rel.name}!`);
+    } else {
+        rel.affection -= 5;
+        this.addLogEntry(`😔 ${rel.name} رفض دعوتك للموعد... "ربما في وقت آخر."`, 'negative');
+        this.modifyMood(-5, null);
+    }
+    this.updateAllUI();
+    this.interactWith(index);
+};
+
+GameEngine.prototype.confessLove = function(index) {
+    const rel = this.state.relationships[index];
+    if (!rel) return;
+    
+    const successChance = Math.min(95, rel.affection);
+    if (this.chance(successChance)) {
+        rel.inLove = true;
+        rel.affection = Math.min(100, rel.affection + this.randomInt(10, 20));
+        this.addLogEntry(`💘 اعترفت بحبك لـ ${rel.name}! "أنا... أشعر بنفس الشيء!" قال بدموع الفرح.`, 'romance');
+        this.modifyMood(15, `${rel.name} يبادلك الحب!`);
+    } else {
+        rel.affection -= 10;
+        rel.dating = false;
+        this.addLogEntry(`💔 ${rel.name} لا يشعر بنفس الشيء... "أنا آسف، أراك كصديق فقط."`, 'negative');
+        this.modifyMood(-10, "حسرة القلب...");
+    }
+    this.updateAllUI();
+    this.interactWith(index);
+};
+
+// ============ عضو الفريق يطلب موعداً ============
+GameEngine.prototype.triggerPartyMemberDateRequest = function() {
+    if (this.state.married || this.state.age < 16) return;
+    
+    const playerGender = this.state.gender;
+    const eligible = this.state.relationships.filter(r => 
+        r.active !== false && 
+        r.affection >= 45 && 
+        !r.dating && !r.inLove &&
+        ((playerGender === 'male' && r.gender === 'female') || (playerGender === 'female' && r.gender === 'male'))
+    );
+    if (eligible.length === 0) return;
+    
+    const rel = this.randomPick(eligible);
+    const relIndex = this.state.relationships.indexOf(rel);
+    const genderIcon = rel.gender === 'male' ? '♂' : '♀';
+    
+    this.pendingChoice = `
+        <div class="section-header">💕 طلب خاص</div>
+        <div class="log-entry romance">
+            ${rel.icon} ${genderIcon} ${rel.name} يقترب منك بتوتر...<br>
+            <em>"مرحباً... كنت أتساءل إذا... ربما تود الخروج في موعد معي؟"</em>
+        </div>
+        <button class="choice-btn" onclick="game.acceptDate(${relIndex})">💕 "بكل سرور!"</button>
+        <button class="choice-btn" onclick="game.rejectDate(${relIndex})">😅 "آسف، لست مهتماً."</button>
+        <button class="choice-btn" onclick="game.showAgeActions()">🤔 "دعني أفكر..." (تخطي)</button>
+    `;
+    this.showAgeActions();
+};
+
+GameEngine.prototype.acceptDate = function(index) {
+    const rel = this.state.relationships[index];
+    if (!rel) { this.pendingChoice = null; this.showAgeActions(); return; }
+    
+    rel.dating = true;
+    rel.affection = Math.min(100, rel.affection + this.randomInt(8, 15));
+    this.addLogEntry(`💕 قبلت دعوة ${rel.name} للموعد! كان مساءً ساحراً.`, 'romance');
+    this.modifyMood(10, `موعد رائع!`);
+    this.pendingChoice = null;
+    this.updateAllUI();
+    this.showAgeActions();
+};
+
+GameEngine.prototype.rejectDate = function(index) {
+    const rel = this.state.relationships[index];
+    if (!rel) { this.pendingChoice = null; this.showAgeActions(); return; }
+    
+    rel.affection -= 8;
+    this.addLogEntry(`😔 رفضت طلب ${rel.name} للموعد. بدا محبطاً.`, 'negative');
+    this.modifyMood(-3, null);
+    this.pendingChoice = null;
+    this.updateAllUI();
+    this.showAgeActions();
+};
+
+// ============ عضو الفريق يعترف بحبه ============
+GameEngine.prototype.triggerPartyMemberLoveConfession = function() {
+    if (this.state.married) return;
+    
+    const playerGender = this.state.gender;
+    const eligible = this.state.relationships.filter(r => 
+        r.active !== false && 
+        r.dating && !r.inLove &&
+        r.affection >= 70 &&
+        ((playerGender === 'male' && r.gender === 'female') || (playerGender === 'female' && r.gender === 'male'))
+    );
+    if (eligible.length === 0) return;
+    
+    const rel = this.randomPick(eligible);
+    const relIndex = this.state.relationships.indexOf(rel);
+    const genderIcon = rel.gender === 'male' ? '♂' : '♀';
+    
+    this.pendingChoice = `
+        <div class="section-header">💘 اعتراف بالحب!</div>
+        <div class="log-entry romance">
+            ${rel.icon} ${genderIcon} ${rel.name} يمسك يدك بنظرة جادة...<br>
+            <em>"أنا... وقعت في حبك. لا أستطيع إخفاء ذلك بعد الآن. هل تشعر بنفس الشيء؟"</em>
+        </div>
+        <button class="choice-btn" onclick="game.acceptLoveConfession(${relIndex})">💘 "أنا أحبك أيضاً!"</button>
+        <button class="choice-btn" onclick="game.rejectLoveConfession(${relIndex})">💔 "أنا آسف... لا أشعر بذلك."</button>
+        <button class="choice-btn" onclick="game.showAgeActions()">😅 "أحتاج وقتاً..." (تخطي)</button>
+    `;
+    this.showAgeActions();
+};
+
+GameEngine.prototype.acceptLoveConfession = function(index) {
+    const rel = this.state.relationships[index];
+    if (!rel) { this.pendingChoice = null; this.showAgeActions(); return; }
+    
+    rel.inLove = true;
+    rel.affection = Math.min(100, rel.affection + this.randomInt(10, 20));
+    this.addLogEntry(`💘 أنت و${rel.name} الآن في حالة حب! قلوبكما تنبض كواحد.`, 'romance');
+    this.modifyMood(15, `في حالة حب مع ${rel.name}!`);
+    this.pendingChoice = null;
+    this.updateAllUI();
+    this.showAgeActions();
+};
+
+GameEngine.prototype.rejectLoveConfession = function(index) {
+    const rel = this.state.relationships[index];
+    if (!rel) { this.pendingChoice = null; this.showAgeActions(); return; }
+    
+    rel.affection -= 15;
+    rel.dating = false;
+    this.addLogEntry(`💔 رفضت اعتراف ${rel.name} بالحب. قلبه منكسر.`, 'negative');
+    this.modifyMood(-8, "خيار مؤلم...");
+    this.pendingChoice = null;
+    this.updateAllUI();
+    this.showAgeActions();
 };
 
 // ============ تبويب المخزون ============

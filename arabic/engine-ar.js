@@ -742,14 +742,15 @@ class GameEngine {
             html += '<div class="family-section">';
             html += '<div class="family-section-title">💒 الزوج/الزوجة</div>';
             const spouse = s.marriedToData;
+            const spouseAgeDisplay = spouse.spouseAge ? ` • العمر ${spouse.spouseAge}` : '';
             html += `
                 <div class="family-member-card">
                     <div class="family-avatar">${spouse.gender === 'male' ? '🤵' : '👰'}</div>
                     <div class="family-info">
                         <div class="family-name">${spouse.fullName || spouse.name}</div>
-                        <div class="family-details">${spouse.gender === 'male' ? 'زوج' : 'زوجة'} • ${spouse.typeName || spouse.type} ${spouse.personality}</div>
+                        <div class="family-details">${spouse.gender === 'male' ? 'زوج' : 'زوجة'}${spouseAgeDisplay} • ${spouse.typeName || spouse.type} ${spouse.personality}</div>
                     </div>
-                    <span class="family-status alive">💕 ${spouse.affection}%</span>
+                    <span class="family-status alive">💕 ${spouse.affection}% • ❤️ حي</span>
                 </div>
             `;
             html += '</div>';
@@ -1297,6 +1298,24 @@ class GameEngine {
                     this.modifyMood(-15, `فقدان ${sib.name} يجعلك حزيناً جداً...`);
                 }
             });
+        }
+
+        // تقدم عمر أعضاء الفريق
+        if (this.state.relationships) {
+            this.state.relationships.forEach(rel => {
+                if (rel.active !== false) {
+                    if (!rel.memberAge) rel.memberAge = this.state.age + this.randomInt(-5, 5);
+                    rel.memberAge++;
+                }
+            });
+        }
+
+        // تقدم عمر الزوج/الزوجة
+        if (this.state.marriedToData) {
+            if (!this.state.marriedToData.spouseAge) {
+                this.state.marriedToData.spouseAge = this.state.age + this.randomInt(-3, 3);
+            }
+            this.state.marriedToData.spouseAge++;
         }
     }
 }
